@@ -29,12 +29,14 @@ just application code.
 - `project/plugins.sbt`: declares sbt plugins, currently `sbt-assembly` and
   `sbt-scalafmt`.
 - `src/main/scala/Main.scala`: Scala 3 Spark CSV transaction pipeline with the
-  `Main` main class. Defaults to `local-cluster[3,1,4096]`, which starts one
+  `Main` main class. Defaults to `local-cluster[3,1,200]`, which starts one
   Spark master and three worker JVMs locally. Uses Wick `DataSeq` operations for
   typed filtering, grouping keys, aggregation inputs, and ordering. Configures
-  Spark executors with `spark.executor.memory=3g` and adds the driver's active
-  Scala library to executor classpaths so local-cluster RPC serialization uses a
-  matching Scala standard library.
+  Spark executors with `spark.executor.memory=200m`, sets
+  `spark.testing.reservedMemory=0` so Spark accepts the intentionally tiny
+  development heap, and adds the driver's active Scala library to executor
+  classpaths so local-cluster RPC serialization uses a matching Scala standard
+  library.
 - `scripts/GenerateTransactions.scala`: deterministic Scala script that writes
   the sample transaction CSV.
 - `data/input/transactions.csv`: generated 100,000-row sample CSV with the

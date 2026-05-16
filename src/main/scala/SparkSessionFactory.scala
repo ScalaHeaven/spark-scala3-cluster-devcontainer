@@ -2,7 +2,8 @@ import org.apache.spark.sql.SparkSession
 
 object SparkSessionFactory {
   private val AnalysisPartitions = "12"
-  private val ExecutorMemory = "3g"
+  private val ExecutorMemory = "200m"
+  private val ReservedMemory = "0"
   private val DriverScalaLibraryPath =
     Option(
       classOf[scala.collection.immutable.ArraySeq[?]]
@@ -39,6 +40,7 @@ object SparkSessionFactory {
       .config("spark.default.parallelism", AnalysisPartitions)
       .config("spark.executor.instances", "3")
       .config("spark.executor.memory", ExecutorMemory)
+      .config("spark.testing.reservedMemory", ReservedMemory)
       .config("spark.executor.extraClassPath", DriverScalaLibraryPath)
       .config("spark.driver.extraJavaOptions", javaOptions)
       .config("spark.executor.extraJavaOptions", javaOptions)

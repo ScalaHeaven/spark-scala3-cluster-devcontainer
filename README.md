@@ -1,98 +1,100 @@
 # Scala 3 Spark Devcontainer
 
-This repository is a ready-to-open Scala 3 development workspace for building
-and running an Apache Spark CSV pipeline. It includes:
+Ready-to-open Scala 3 workspace for developing and running an Apache Spark CSV
+pipeline in VS Code Dev Containers.
 
-- Scala `3.8.3`
-- Apache Spark SQL `3.5.1`
-- Wick `0.0.4` for type-safe Spark DataFrame transformations
-- sbt `1.12.11`
-- a VS Code Dev Containers setup with JDK 21, Scala CLI, sbt, Metals, Codex,
-  and Metals MCP
-- JDK source archives linked into the devcontainer JDK so Metals can navigate
-  into Java standard library classes
-- a production Dockerfile that builds a runnable assembly JAR
+This repository gives you:
 
-The example application starts a local Spark standalone cluster with one master
-and three worker nodes, reads a transaction CSV with a fixed schema, validates
-and enriches rows, aggregates revenue metrics, and writes partitioned Parquet
-output. The pipeline uses Wick for typed filtering, grouping keys, aggregate
-expressions, and ordering while keeping Spark SQL APIs for CSV parsing,
-timestamp/date handling, rounding, and Parquet writes.
+- Scala `3.8.3`, sbt `1.12.11`, and Apache Spark SQL `3.5.1`
+- Wick `0.0.4` for typed Spark DataFrame transformations
+- a VS Code devcontainer with JDK 21, Scala CLI, sbt, Metals, Codex, and Metals MCP
+- JDK source archives linked into the devcontainer JDK for Java standard library
+  navigation from Metals
+- a deterministic 100,000-row transaction CSV sample
+- a production Dockerfile that builds and runs an assembly JAR
+
+The example app reads a fixed-schema transaction CSV, filters invalid rows,
+adds event date and revenue columns, aggregates reporting metrics, and writes
+partitioned Parquet output. By default it runs against a local Spark standalone
+cluster with one master and three worker JVMs, so development behaves like a
+small cluster without any external services.
 
 ## Quick Start
 
-Open the folder in VS Code and run **Dev Containers: Reopen in Container**.
-The devcontainer opens at `/workspaces/spark-scala3-cluster-devcontainer` and repairs
-workspace ownership on start so Metals can write `.metals/metals.log` as the
-non-root `vscode` user. Startup also syncs `/opt/spark` to the Spark version
-pinned by the template so local-cluster executors use the same Spark jars as
-the driver.
+Open this folder in VS Code, then run **Dev Containers: Reopen in Container**.
+The container opens at `/workspaces/spark-scala3-cluster-devcontainer`.
+
+On startup, the devcontainer repairs common workspace ownership issues, syncs
+the minimal `/opt/spark` home to the Spark version pinned by the build, configures
+Git/Codex integration when host files are mounted, and starts Metals MCP.
 
 Inside the container:
 
 ```bash
-scala-cli scripts/GenerateTransactions.scala -- data/input/transactions.csv 100000
+sbt -Dsbt.batch=true compile
 sbt -Dsbt.batch=true run
+```
+
+Regenerate the sample CSV before running if you want a fresh copy:
+
+```bash
+scala-cli scripts/GenerateTransactions.scala -- data/input/transactions.csv 100000
+```
+
+Run with explicit input and output paths:
+
+```bash
 sbt -Dsbt.batch=true "run data/input/transactions.csv target/spark-output/transaction-summary"
 ```
 
-Build and run the application image:
+Show CLI usage:
 
 ```bash
-docker build -t spark-scala3-cluster-devcontainer .
-docker run --rm spark-scala3-cluster-devcontainer
+sbt -Dsbt.batch=true "run --help"
 ```
 
-The default input is:
+## Runtime Defaults
+
+When no arguments are supplied, the app uses:
 
 ```text
-data/input/transactions.csv
+input_csv    data/input/transactions.csv
+output_dir   target/spark-output/transaction-summary
+spark_master local-cluster[3,1,200]
 ```
 
-The default output is:
+`local-cluster[3,1,200]` starts one local standalone master and three worker
+JVMs. Each worker has one core and 200 MiB of worker memory. Executors are
+configured with `spark.executor.memory=200m`, and Spark's reserved-memory floor
+is disabled with `spark.testing.reservedMemory=0` so the low-memory development
+cluster can start. The driver JVM uses `-Xmx4g` for `sbt run`, VS Code debug
+launches, and the production Docker image.
 
-```text
-target/spark-output/transaction-summary
+To target another Spark master, pass it as the third argument:
+
+```bash
+sbt -Dsbt.batch=true "run /data/landing/transactions.csv /data/curated/transaction-summary spark://spark-master:7077"
 ```
 
-The default Spark master is:
-
-```text
-local-cluster[3,1,4096]
-```
-
-That Spark master starts one local standalone master and three worker JVMs, each
-with one core and 4096 MiB of worker memory. Use this mode when you want the
-template to behave like a small cluster without managing external services.
-The Spark executors are configured with `spark.executor.memory=3g`, leaving room
-for Spark's executor memory overhead on each 4096 MiB worker. The
-application driver JVM uses `-Xmx4g` for `sbt run`, VS Code debug launches, and
-the production Docker image.
-
-Spark `3.5.1` is consumed through the explicit `spark-sql_2.13` artifact
-because Spark publishes its Scala APIs for Scala 2.13. The application code
-itself is compiled with Scala `3.8.3`, `SPARK_SCALA_VERSION` remains `2.13` for
-local-cluster executor startup, and local executors receive the driver's active
-Scala library first on their classpath so Spark RPC serialization uses one
-matching standard library on both sides.
+For external clusters, make sure the input and output paths are reachable from
+both the driver and executors.
 
 ## CSV Contract
 
-The pipeline uses an explicit Spark `StructType`; it does not infer CSV types.
+The reader uses an explicit Spark `StructType`; it does not infer CSV types.
 Input files must include this header:
 
 ```csv
 transaction_id,customer_id,event_ts,region,country,product_id,product_category,quantity,unit_price,discount_pct,payment_method,status
 ```
 
-Field meanings:
+Fields:
 
 - `transaction_id`: unique transaction identifier
 - `customer_id`: customer identifier
 - `event_ts`: timestamp in `yyyy-MM-dd'T'HH:mm:ss` format
 - `region`: business region, such as `NA`, `EMEA`, or `APAC`
-- `country`: ISO-like country code used for reporting
+- `country`: country code used for reporting
 - `product_id`: product SKU
 - `product_category`: reporting category
 - `quantity`: positive integer quantity
@@ -101,20 +103,14 @@ Field meanings:
 - `payment_method`: payment channel label
 - `status`: transaction status, such as `completed` or `refunded`
 
-Malformed rows, rows with missing identifiers, invalid timestamps, non-positive
-quantities, negative prices, or discounts outside `0.0` through `1.0` are
-excluded before aggregation.
-
-Regenerate the checked-in 100,000-row sample file with:
-
-```bash
-scala-cli scripts/GenerateTransactions.scala -- data/input/transactions.csv 100000
-```
+Rows are excluded before aggregation when they are malformed, have missing
+required identifiers or timestamps, have invalid timestamps, use non-positive
+quantities, use negative prices, or have discounts outside `0.0` through `1.0`.
 
 ## Pipeline Output
 
-The job writes Parquet files partitioned by `event_date`. Each output row is
-grouped by:
+The job writes gzip-compressed Parquet files partitioned by `event_date`.
+Rows are grouped by:
 
 - `event_date`
 - `region`
@@ -122,7 +118,7 @@ grouped by:
 - `product_category`
 - `status`
 
-Metrics written:
+Metrics:
 
 - `transaction_count`
 - `unique_customers`
@@ -130,16 +126,10 @@ Metrics written:
 - `gross_revenue`
 - `net_revenue`
 
-For a large CSV, pass the input and output paths explicitly:
+The default output directory is overwritten on each run:
 
-```bash
-sbt -Dsbt.batch=true "run /data/landing/transactions.csv /data/curated/transaction-summary"
-```
-
-To target a different Spark master, pass a third argument:
-
-```bash
-sbt -Dsbt.batch=true "run /data/landing/transactions.csv /data/curated/transaction-summary spark://spark-master:7077"
+```text
+target/spark-output/transaction-summary
 ```
 
 ## Build And Validation
@@ -160,28 +150,44 @@ Format Scala sources with:
 sbt -Dsbt.batch=true scalafmtAll
 ```
 
-## Important Files
+Build and run the production image:
 
-- `build.sbt`: pins Scala, adds Spark SQL and Wick, configures the `sbt run`
-  JVM heap, configures Java module options for Spark, and builds an assembly
-  JAR.
-- `src/main/scala/Main.scala`: Scala 3 Spark CSV pipeline entry point using
-  Wick typed operations.
-- `scripts/GenerateTransactions.scala`: deterministic generator for the
-  checked-in transaction CSV sample.
-- `data/input/transactions.csv`: generated 100,000-row sample file with the
-  production CSV structure.
-- `.devcontainer/Dockerfile`: development image with JDK 21, JDK sources for
-  Metals Java navigation, Scala tools, and a minimal `/opt/spark` home used by
-  local cluster executors.
-- `Dockerfile`: production multi-stage build for the Spark application. It
-  generates the sample CSV, copies the same minimal Spark home into the runtime
-  image so `local-cluster[3,1,4096]` can launch worker executors.
+```bash
+docker build -t spark-scala3-cluster-devcontainer .
+docker run --rm spark-scala3-cluster-devcontainer
+```
+
+## Project Layout
+
+- `build.sbt`: pins Scala, Spark SQL, and Wick; enables SemanticDB; configures
+  Spark Java module options; sets the `sbt run` heap; and builds `app.jar` with
+  `sbt-assembly`.
+- `src/main/scala/Main.scala`: application entry point.
+- `src/main/scala/Cli.scala`: argument parsing and runtime defaults.
+- `src/main/scala/SparkSessionFactory.scala`: Spark session construction,
+  local-cluster driver binding, executor memory, Java module options, and
+  Scala library classpath handling for executor RPC serialization.
+- `src/main/scala/TransactionSchema.scala`: explicit Spark CSV schema.
+- `src/main/scala/TransactionModels.scala`: Wick row models and nullable CSV
+  boundary types.
+- `src/main/scala/TransactionPipeline.scala`: CSV read, validation,
+  enrichment, aggregation, ordering, and Parquet write.
+- `scripts/GenerateTransactions.scala`: deterministic sample data generator.
+- `data/input/transactions.csv`: checked-in 100,000-row sample CSV.
+- `.devcontainer/Dockerfile`: development image with JDK 21, Scala tools, JDK
+  sources for Metals navigation, and a minimal Spark home.
+- `.devcontainer/post-start.sh`: idempotent startup repair and tool setup.
 - `.vscode/launch.json`: Metals/Scala debug launch config for `Main`.
+- `Dockerfile`: production multi-stage build that generates sample data, builds
+  the assembly JAR, and runs it with the minimal Spark home.
 
-## Notes
+## Spark And Scala Notes
 
-Spark runs in `local-cluster[3,1,4096]` mode by default, which starts one local
-standalone master and three workers for development. For an external cluster,
-pass the Spark master URL as the third application argument and ensure the
-input/output paths are accessible to the driver and executors.
+Spark `3.5.1` is consumed through the explicit `spark-sql_2.13` artifact because
+Spark publishes its Scala APIs for Scala 2.13. Application sources compile with
+Scala `3.8.3`, while `SPARK_SCALA_VERSION` remains `2.13` for local-cluster
+executor startup.
+
+Local-cluster executors receive the driver's active Scala library first on their
+classpath so Spark RPC serialization uses a matching Scala standard library on
+both sides.

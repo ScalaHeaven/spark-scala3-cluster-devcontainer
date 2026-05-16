@@ -11,7 +11,7 @@ enum CliCommand:
 object Cli {
   val DefaultInputPath = "data/input/transactions.csv"
   val DefaultOutputPath = "target/spark-output/transaction-summary"
-  val DefaultMaster = "local-cluster[3,1,4096]"
+  val DefaultMaster = "local-cluster[3,1,200]"
 
   def parseArgs(args: Array[String]): Either[String, CliCommand] =
     args.toList match {
