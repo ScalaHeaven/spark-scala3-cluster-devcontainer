@@ -27,7 +27,7 @@ lazy val sparkJavaOptions = Seq(
 
 lazy val root = (project in file("."))
   .settings(
-    name := "spark-devcontainer",
+    name := "spark-scala3-cluster-devcontainer",
     version := "0.1.0-SNAPSHOT",
     libraryDependencies ++= Seq(
       ("org.apache.spark" % "spark-sql_2.13" % sparkVersion)

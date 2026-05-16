@@ -23,7 +23,7 @@ timestamp/date handling, rounding, and Parquet writes.
 ## Quick Start
 
 Open the folder in VS Code and run **Dev Containers: Reopen in Container**.
-The devcontainer opens at `/workspaces/spark-cluster-devcontainer` and repairs
+The devcontainer opens at `/workspaces/spark-scala3-cluster-devcontainer` and repairs
 workspace ownership on start so Metals can write `.metals/metals.log` as the
 non-root `vscode` user. Startup also syncs `/opt/spark` to the Spark version
 pinned by the template so local-cluster executors use the same Spark jars as
@@ -40,8 +40,8 @@ sbt -Dsbt.batch=true "run data/input/transactions.csv target/spark-output/transa
 Build and run the application image:
 
 ```bash
-docker build -t spark-devcontainer .
-docker run --rm spark-devcontainer
+docker build -t spark-scala3-cluster-devcontainer .
+docker run --rm spark-scala3-cluster-devcontainer
 ```
 
 The default input is:

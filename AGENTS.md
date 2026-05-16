@@ -68,8 +68,8 @@ scala-cli scripts/GenerateTransactions.scala -- data/input/transactions.csv 1000
 sbt -Dsbt.batch=true run
 sbt -Dsbt.batch=true "run data/input/transactions.csv target/spark-output/transaction-summary"
 sbt -Dsbt.batch=true assembly
-docker build -t spark-devcontainer .
-docker run --rm spark-devcontainer
+docker build -t spark-scala3-cluster-devcontainer .
+docker run --rm spark-scala3-cluster-devcontainer
 ```
 
 For formatting, prefer the configured Scala formatter:
@@ -90,7 +90,7 @@ sbt -Dsbt.batch=true scalafmtAll
 - Keep devcontainer scripts idempotent. They are run on creation and on start,
   so repeated execution must be safe.
 - Keep devcontainer workspace paths aligned with
-  `/workspaces/spark-cluster-devcontainer`; Metals and Metals MCP write local
+  `/workspaces/spark-scala3-cluster-devcontainer`; Metals and Metals MCP write local
   state under that workspace path.
 - Preserve non-root `vscode` user behavior in container changes unless the task
   explicitly requires a different model.
