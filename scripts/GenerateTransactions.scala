@@ -10,8 +10,20 @@ import java.time.format.DateTimeFormatter
 object GenerateTransactions {
   private val DefaultOutputPath = "data/input/transactions.csv"
   private val DefaultRowCount = 100000
-  private val Header =
-    "transaction_id,customer_id,event_ts,region,country,product_id,product_category,quantity,unit_price,discount_pct,payment_method,status"
+  private val Header = Vector(
+    "transaction_id",
+    "customer_id",
+    "event_ts",
+    "region",
+    "country",
+    "product_id",
+    "product_category",
+    "quantity",
+    "unit_price",
+    "discount_pct",
+    "payment_method",
+    "status"
+  ).mkString(",")
 
   private val Regions = Region.values.toVector
   private val Products = Product.values.toVector
