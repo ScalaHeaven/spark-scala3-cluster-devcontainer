@@ -26,6 +26,9 @@ CODEX_MCP_TOOL_TIMEOUT_SECONDS="${CODEX_MCP_TOOL_TIMEOUT_SECONDS:-120}"
 
 SBT_VERSION="${SBT_VERSION:-1.12.11}"
 SBT_RUNNER_VERSION="${SBT_RUNNER_VERSION:-0.2.0}"
+SPARK_VERSION="${SPARK_VERSION:-3.5.1}"
+SPARK_HOME="${SPARK_HOME:-/opt/spark}"
+SPARK_SCALA_VERSION="${SPARK_SCALA_VERSION:-2.13}"
 
 BIN_DIR="${BIN_DIR:-/usr/local/bin}"
 CS_BIN="${CS_BIN:-$BIN_DIR/cs}"
@@ -225,6 +228,26 @@ warm_sbt_cache() {
       >/dev/null || true
 }
 
+sync_spark_home() {
+  local marker="$SPARK_HOME/.spark-version"
+  local expected_version="spark-sql_${SPARK_SCALA_VERSION}:${SPARK_VERSION}"
+
+  if [ -f "$marker" ] && [ "$(cat "$marker")" = "$expected_version" ]; then
+    return 0
+  fi
+
+  ensure_dir "$SPARK_HOME/jars"
+  sudo find "$SPARK_HOME/jars" -type f -name '*.jar' -delete
+
+  COURSIER_CACHE="$COURSIER_CACHE" \
+    "$CS_BIN" fetch "org.apache.spark:spark-sql_${SPARK_SCALA_VERSION}:${SPARK_VERSION}" --classpath \
+    | tr ':' '\n' \
+    | while IFS= read -r jar_path; do sudo cp "$jar_path" "$SPARK_HOME/jars/"; done
+
+  printf '%s\n' "$expected_version" | sudo tee "$marker" >/dev/null
+  own_path "$SPARK_HOME"
+}
+
 start_metals_mcp() {
   mkdir -p "$METALS_MCP_DIR"
 
@@ -273,6 +296,7 @@ main() {
   repair_workspace_permissions
   repair_root_coursier_wrappers
   ensure_metals_mcp_installed
+  sync_spark_home
   sync_ssh_config
   sync_codex_config
   configure_codex_metals_mcp

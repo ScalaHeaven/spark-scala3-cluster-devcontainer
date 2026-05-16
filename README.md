@@ -25,7 +25,9 @@ timestamp/date handling, rounding, and Parquet writes.
 Open the folder in VS Code and run **Dev Containers: Reopen in Container**.
 The devcontainer opens at `/workspaces/spark-cluster-devcontainer` and repairs
 workspace ownership on start so Metals can write `.metals/metals.log` as the
-non-root `vscode` user.
+non-root `vscode` user. Startup also syncs `/opt/spark` to the Spark version
+pinned by the template so local-cluster executors use the same Spark jars as
+the driver.
 
 Inside the container:
 

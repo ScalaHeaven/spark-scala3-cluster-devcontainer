@@ -57,6 +57,7 @@ RUN set -eux; \
     COURSIER_CACHE="/home/${USERNAME}/.cache/coursier" cs fetch "org.apache.spark:spark-sql_2.13:${SPARK_VERSION}" --classpath \
       | tr ':' '\n' \
       | while IFS= read -r jar_path; do cp "$jar_path" "${SPARK_HOME}/jars/"; done; \
+    printf '%s\n' "spark-sql_${SPARK_SCALA_VERSION}:${SPARK_VERSION}" > "${SPARK_HOME}/.spark-version"; \
     printf '%s\n' '#!/usr/bin/env sh' 'export COURSIER_CACHE="${COURSIER_CACHE:-/home/vscode/.cache/coursier}"' 'exec /usr/local/bin/cs launch sbt -- "$@"' > /usr/local/bin/sbt; \
     chmod +x /usr/local/bin/sbt; \
     chown -R "${USERNAME}:${USERNAME}" "/home/${USERNAME}/.cache" "${SPARK_HOME}" || true

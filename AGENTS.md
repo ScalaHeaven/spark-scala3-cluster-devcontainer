@@ -45,9 +45,9 @@ just application code.
 - `.devcontainer/Dockerfile`: development image definition, including JDK
   source archives linked into `JAVA_HOME` for Metals Java navigation and a
   minimal `/opt/spark` home for local cluster executors.
-- `.devcontainer/post-start.sh`: repairs workspace permissions, syncs selected
-  host SSH/Codex files, configures Git, configures Codex Metals MCP, and starts
-  Metals MCP.
+- `.devcontainer/post-start.sh`: repairs workspace permissions, syncs
+  `/opt/spark` jars to the pinned Spark version, syncs selected host SSH/Codex
+  files, configures Git, configures Codex Metals MCP, and starts Metals MCP.
 - `.vscode/launch.json`: Metals/Scala debug launch config for `Main`.
 - `.vscode/settings.json`: editor settings, including watcher excludes.
 - `Dockerfile`: production multi-stage build that generates sample data, runs
