@@ -135,36 +135,7 @@ object Main {
         System.exit(1)
 
       case Right(config) =>
-        val sparkBuilder = SparkSession
-          .builder()
-          .appName("Large CSV Transaction Pipeline")
-          .master(config.master)
-          .config("spark.sql.shuffle.partitions", AnalysisPartitions)
-          .config("spark.default.parallelism", AnalysisPartitions)
-          .config("spark.executor.instances", "3")
-          .config("spark.executor.memory", ExecutorMemory)
-          .config("spark.executor.extraClassPath", DriverScalaLibraryPath)
-          .config(
-            "spark.driver.extraJavaOptions",
-            SparkJavaOptions.mkString(" ")
-          )
-          .config(
-            "spark.executor.extraJavaOptions",
-            SparkJavaOptions.mkString(" ")
-          )
-          .config("spark.executorEnv.SPARK_SCALA_VERSION", "2.13")
-          .config("spark.sql.parquet.compression.codec", "gzip")
-
-        val configuredBuilder =
-          if (config.master.startsWith("local")) {
-            sparkBuilder
-              .config("spark.driver.host", "127.0.0.1")
-              .config("spark.driver.bindAddress", "127.0.0.1")
-          } else {
-            sparkBuilder
-          }
-
-        val spark = configuredBuilder.getOrCreate()
+        val spark = createSparkSession(config)
         spark.sparkContext.setLogLevel("WARN")
 
         try {
@@ -187,6 +158,32 @@ object Main {
       case _ =>
         Left(usage)
     }
+
+  private def createSparkSession(config: JobConfig): SparkSession = {
+    val javaOptions = SparkJavaOptions.mkString(" ")
+    val builder = SparkSession
+      .builder()
+      .appName("Large CSV Transaction Pipeline")
+      .master(config.master)
+      .config("spark.sql.shuffle.partitions", AnalysisPartitions)
+      .config("spark.default.parallelism", AnalysisPartitions)
+      .config("spark.executor.instances", "3")
+      .config("spark.executor.memory", ExecutorMemory)
+      .config("spark.executor.extraClassPath", DriverScalaLibraryPath)
+      .config("spark.driver.extraJavaOptions", javaOptions)
+      .config("spark.executor.extraJavaOptions", javaOptions)
+      .config("spark.executorEnv.SPARK_SCALA_VERSION", "2.13")
+      .config("spark.sql.parquet.compression.codec", "gzip")
+
+    if (config.master.startsWith("local")) {
+      builder
+        .config("spark.driver.host", "127.0.0.1")
+        .config("spark.driver.bindAddress", "127.0.0.1")
+        .getOrCreate()
+    } else {
+      builder.getOrCreate()
+    }
+  }
 
   private def usage: String =
     s"""Usage: sbt "run [input_csv] [output_dir] [spark_master]"
@@ -234,41 +231,20 @@ object Main {
         .csv(inputPath)
     )
 
-  private def toSparkColumn(expr: Expr[?]): Column = {
+  private def toSparkColumn(expr: Expr[?]): Column =
     org.apache.spark.sql.Spark4ColumnCompat.fromCatalystExpression(
       expr.underlying
     )
-  }
+
+  private def wickRef[T]: DataSeq.Ref[T] =
+    DataSeq.Ref[T](None)
 
   private def wickFilter[T](
       dataSeq: DataSeq[T]
   )(condition: DataSeq.Ref[T] => Expr[Boolean]): DataSeq[T] =
     DataSeq[T](
       dataSeq.dataFrame.filter(
-        toSparkColumn(condition(DataSeq.Ref[T](None)))
-      )
-    )
-
-  private def wickColumns[T](
-      dataSeq: DataSeq[T]
-  )(columns: DataSeq.Ref[T] => Seq[(String, Expr[?])]): Seq[Column] =
-    columns(DataSeq.Ref[T](None)).map { case (name, expr) =>
-      toSparkColumn(expr).as(name)
-    }
-
-  private def wickAggregateColumns[T](
-      dataSeq: DataSeq[T]
-  )(columns: DataSeq.Ref[T] => Seq[(String, Column)]): Seq[Column] =
-    columns(DataSeq.Ref[T](None)).map { case (name, column) =>
-      column.as(name)
-    }
-
-  private def wickOrderBy[T](
-      dataSeq: DataSeq[T]
-  )(columns: DataSeq.Ref[T] => Seq[Expr[?]]): DataSeq[T] =
-    DataSeq[T](
-      dataSeq.dataFrame.sort(
-        columns(DataSeq.Ref[T](None)).map(toSparkColumn)*
+        toSparkColumn(condition(wickRef[T]))
       )
     )
 
@@ -313,27 +289,26 @@ object Main {
   private def summarizeTransactions(
       transactions: DataSeq[EnrichedTransaction]
   ): DataFrame = {
-    val groupColumns = wickColumns(transactions)(row =>
-      Seq(
-        "event_date" -> row.event_date,
-        "region" -> row.region,
-        "country" -> row.country,
-        "product_category" -> row.product_category,
-        "status" -> row.status
-      )
-    )
+    val transaction = wickRef[EnrichedTransaction]
+    val groupColumns = Seq(
+      "event_date" -> transaction.event_date,
+      "region" -> transaction.region,
+      "country" -> transaction.country,
+      "product_category" -> transaction.product_category,
+      "status" -> transaction.status
+    ).map { case (name, expr) => toSparkColumn(expr).as(name) }
 
-    val aggregateColumns = wickAggregateColumns(transactions)(row =>
-      Seq(
-        "transaction_count" -> sparkCount(toSparkColumn(row.transaction_id)),
-        "unique_customers" -> sparkCountDistinct(
-          toSparkColumn(row.customer_id)
-        ),
-        "units_sold" -> sparkSum(toSparkColumn(row.quantity)),
-        "gross_revenue" -> sparkSum(toSparkColumn(row.gross_amount)),
-        "net_revenue" -> sparkSum(toSparkColumn(row.net_amount))
-      )
-    )
+    val aggregateColumns = Seq(
+      "transaction_count" -> sparkCount(
+        toSparkColumn(transaction.transaction_id)
+      ),
+      "unique_customers" -> sparkCountDistinct(
+        toSparkColumn(transaction.customer_id)
+      ),
+      "units_sold" -> sparkSum(toSparkColumn(transaction.quantity)),
+      "gross_revenue" -> sparkSum(toSparkColumn(transaction.gross_amount)),
+      "net_revenue" -> sparkSum(toSparkColumn(transaction.net_amount))
+    ).map { case (name, column) => column.as(name) }
 
     val aggregated = transactions.dataFrame
       .groupBy(groupColumns*)
@@ -352,14 +327,15 @@ object Main {
       sparkRound(sparkCol("net_revenue"), 2).as("net_revenue")
     )
 
-    wickOrderBy(DataSeq[TransactionSummary](rounded))(row =>
+    val summary = wickRef[TransactionSummary]
+    rounded.sort(
       Seq(
-        row.event_date,
-        row.region,
-        row.country,
-        row.product_category,
-        row.status
-      )
-    ).dataFrame
+        summary.event_date,
+        summary.region,
+        summary.country,
+        summary.product_category,
+        summary.status
+      ).map(toSparkColumn)*
+    )
   }
 }
