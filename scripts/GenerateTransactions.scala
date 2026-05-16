@@ -3,9 +3,7 @@
 
 import java.io.BufferedWriter
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
+import java.nio.file.{Files, Path, Paths}
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -37,7 +35,11 @@ object GenerateTransactions {
     case Singapore extends Region("APAC", "SG")
     case Brazil extends Region("LATAM", "BR")
 
-  private enum Product(val id: String, val category: String, val basePrice: Double):
+  private enum Product(
+      val id: String,
+      val category: String,
+      val basePrice: Double
+  ):
     case HardwarePremium extends Product("sku-1001", "hardware", 129.99)
     case HardwareStandard extends Product("sku-1002", "hardware", 79.50)
     case SoftwareStandard extends Product("sku-2001", "software", 249.00)
@@ -80,7 +82,9 @@ object GenerateTransactions {
   private def parseArgs(args: Array[String]): Either[String, CliCommand] =
     args.toList match {
       case Nil =>
-        Right(CliCommand.Run(Config(Paths.get(DefaultOutputPath), DefaultRowCount)))
+        Right(
+          CliCommand.Run(Config(Paths.get(DefaultOutputPath), DefaultRowCount))
+        )
       case "--help" :: Nil =>
         Right(CliCommand.ShowUsage)
       case outputPath :: Nil =>
