@@ -10,7 +10,7 @@ import java.time.format.DateTimeFormatter
 object GenerateTransactions {
   private val DefaultOutputPath = "data/input/transactions.csv"
   private val DefaultRowCount = 100000
-  private val Header = Vector(
+  private val Header = List(
     "transaction_id",
     "customer_id",
     "event_ts",
