@@ -29,7 +29,15 @@ object Main {
   private val DefaultOutputPath = "target/spark-output/transaction-summary"
   private val DefaultMaster = "local-cluster[3,1,4096]"
   private val AnalysisPartitions = "12"
-  private val ExecutorMemory = "4g"
+  private val ExecutorMemory = "3g"
+  private val DriverScalaLibraryPath =
+    Option(
+      classOf[scala.collection.immutable.ArraySeq[?]]
+        .getProtectionDomain()
+        .getCodeSource()
+    )
+      .map(_.getLocation().toURI().getPath())
+      .getOrElse("")
   private val SparkJavaOptions = Seq(
     "--add-opens=java.base/java.lang=ALL-UNNAMED",
     "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
@@ -135,6 +143,7 @@ object Main {
           .config("spark.default.parallelism", AnalysisPartitions)
           .config("spark.executor.instances", "3")
           .config("spark.executor.memory", ExecutorMemory)
+          .config("spark.executor.extraClassPath", DriverScalaLibraryPath)
           .config(
             "spark.driver.extraJavaOptions",
             SparkJavaOptions.mkString(" ")

@@ -63,14 +63,17 @@ local-cluster[3,1,4096]
 That Spark master starts one local standalone master and three worker JVMs, each
 with one core and 4096 MiB of worker memory. Use this mode when you want the
 template to behave like a small cluster without managing external services.
-The Spark executors are configured with `spark.executor.memory=4g`, and the
+The Spark executors are configured with `spark.executor.memory=3g`, leaving room
+for Spark's executor memory overhead on each 4096 MiB worker. The
 application driver JVM uses `-Xmx4g` for `sbt run`, VS Code debug launches, and
 the production Docker image.
 
 Spark `4.1.1` is still consumed through the explicit `spark-sql_2.13` artifact
 because Spark publishes its Scala APIs for Scala 2.13. The application code
-itself is compiled with Scala `3.8.3`, and `SPARK_SCALA_VERSION` remains `2.13`
-for local-cluster executor startup.
+itself is compiled with Scala `3.8.3`, `SPARK_SCALA_VERSION` remains `2.13` for
+local-cluster executor startup, and local executors receive the driver's active
+Scala library first on their classpath so Spark RPC serialization uses one
+matching standard library on both sides.
 
 ## CSV Contract
 

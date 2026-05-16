@@ -32,7 +32,9 @@ just application code.
   `Main` main class. Defaults to `local-cluster[3,1,4096]`, which starts one
   Spark master and three worker JVMs locally. Uses Wick `DataSeq` operations for
   typed filtering, grouping keys, aggregation inputs, and ordering. Configures
-  Spark executors with `spark.executor.memory=4g`.
+  Spark executors with `spark.executor.memory=3g` and adds the driver's active
+  Scala library to executor classpaths so local-cluster RPC serialization uses a
+  matching Scala standard library.
 - `scripts/GenerateTransactions.scala`: deterministic Scala script that writes
   the sample transaction CSV.
 - `data/input/transactions.csv`: generated 100,000-row sample CSV with the
