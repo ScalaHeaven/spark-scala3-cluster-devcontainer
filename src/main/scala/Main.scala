@@ -1,20 +1,19 @@
 //> using scala 3.8.3
 //> using options -Yexplicit-nulls
-//> using dep org.apache.spark:spark-sql_2.13:4.1.1
+//> using dep org.apache.spark:spark-sql_2.13:3.5.1
 //> using dep com.netflix.wick::wick:0.0.4
 //> using exclude org.apache.spark:spark-sql_2.13
 
 import com.netflix.wick.{*, given}
+import com.netflix.wick.functions.count
+import com.netflix.wick.functions.countDistinct
+import com.netflix.wick.functions.sum
 import java.sql.Timestamp
-import org.apache.spark.sql.Column
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.classic.SparkSession
-import org.apache.spark.sql.functions.col as sparkCol
-import org.apache.spark.sql.functions.count as sparkCount
-import org.apache.spark.sql.functions.countDistinct as sparkCountDistinct
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.round as sparkRound
-import org.apache.spark.sql.functions.sum as sparkSum
+import org.apache.spark.sql.functions.round
 import org.apache.spark.sql.functions.to_date
 import org.apache.spark.sql.functions.try_to_timestamp
 import org.apache.spark.sql.types.DoubleType
@@ -25,6 +24,10 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
 
 object Main {
+  private type CsvString = String | Null
+  private type CsvInt = Int | Null
+  private type CsvDouble = Double | Null
+
   private val DefaultInputPath = "data/input/transactions.csv"
   private val DefaultOutputPath = "target/spark-output/transaction-summary"
   private val DefaultMaster = "local-cluster[3,1,4096]"
@@ -80,35 +83,39 @@ object Main {
       master: String
   )
 
+  private enum CliCommand:
+    case Run(config: JobConfig)
+    case ShowUsage
+
   final case class RawTransaction(
-      transaction_id: String | Null,
-      customer_id: String | Null,
-      event_ts: String | Null,
-      region: String | Null,
-      country: String | Null,
-      product_id: String | Null,
-      product_category: String | Null,
-      quantity: Int | Null,
-      unit_price: Double | Null,
-      discount_pct: Double | Null,
-      payment_method: String | Null,
-      status: String | Null,
-      `_corrupt_record`: String | Null
+      transaction_id: CsvString,
+      customer_id: CsvString,
+      event_ts: CsvString,
+      region: CsvString,
+      country: CsvString,
+      product_id: CsvString,
+      product_category: CsvString,
+      quantity: CsvInt,
+      unit_price: CsvDouble,
+      discount_pct: CsvDouble,
+      payment_method: CsvString,
+      status: CsvString,
+      `_corrupt_record`: CsvString
   )
 
   final case class EnrichedTransaction(
       transaction_id: String,
       customer_id: String,
       event_ts: String,
-      region: String | Null,
-      country: String | Null,
-      product_id: String | Null,
-      product_category: String | Null,
+      region: CsvString,
+      country: CsvString,
+      product_id: CsvString,
+      product_category: CsvString,
       quantity: Int,
       unit_price: Double,
       discount_pct: Double,
-      payment_method: String | Null,
-      status: String | Null,
+      payment_method: CsvString,
+      status: CsvString,
       event_time: Timestamp,
       event_date: Timestamp,
       gross_amount: Double,
@@ -117,10 +124,10 @@ object Main {
 
   final case class TransactionSummary(
       event_date: Timestamp,
-      region: String | Null,
-      country: String | Null,
-      product_category: String | Null,
-      status: String | Null,
+      region: CsvString,
+      country: CsvString,
+      product_category: CsvString,
+      status: CsvString,
       transaction_count: Long,
       unique_customers: Long,
       units_sold: Long,
@@ -134,7 +141,10 @@ object Main {
         System.err.println(message)
         System.exit(1)
 
-      case Right(config) =>
+      case Right(CliCommand.ShowUsage) =>
+        println(usage)
+
+      case Right(CliCommand.Run(config)) =>
         val spark = createSparkSession(config)
         spark.sparkContext.setLogLevel("WARN")
 
@@ -145,16 +155,20 @@ object Main {
         }
     }
 
-  private def parseArgs(args: Array[String]): Either[String, JobConfig] =
+  private def parseArgs(args: Array[String]): Either[String, CliCommand] =
     args.toList match {
       case Nil =>
-        Right(JobConfig(DefaultInputPath, DefaultOutputPath, DefaultMaster))
+        Right(
+          CliCommand.Run(
+            JobConfig(DefaultInputPath, DefaultOutputPath, DefaultMaster)
+          )
+        )
       case "--help" :: Nil =>
-        Left(usage)
+        Right(CliCommand.ShowUsage)
       case inputPath :: outputPath :: Nil =>
-        Right(JobConfig(inputPath, outputPath, DefaultMaster))
+        Right(CliCommand.Run(JobConfig(inputPath, outputPath, DefaultMaster)))
       case inputPath :: outputPath :: master :: Nil =>
-        Right(JobConfig(inputPath, outputPath, master))
+        Right(CliCommand.Run(JobConfig(inputPath, outputPath, master)))
       case _ =>
         Left(usage)
     }
@@ -176,14 +190,17 @@ object Main {
       .config("spark.sql.parquet.compression.codec", "gzip")
 
     if (config.master.startsWith("local")) {
-      builder
-        .config("spark.driver.host", "127.0.0.1")
-        .config("spark.driver.bindAddress", "127.0.0.1")
-        .getOrCreate()
+      builder.bindLocalDriver.getOrCreate()
     } else {
       builder.getOrCreate()
     }
   }
+
+  extension (builder: SparkSession.Builder)
+    private def bindLocalDriver: SparkSession.Builder =
+      builder
+        .config("spark.driver.host", "127.0.0.1")
+        .config("spark.driver.bindAddress", "127.0.0.1")
 
   private def usage: String =
     s"""Usage: sbt "run [input_csv] [output_dir] [spark_master]"
@@ -231,27 +248,10 @@ object Main {
         .csv(inputPath)
     )
 
-  private def toSparkColumn(expr: Expr[?]): Column =
-    org.apache.spark.sql.Spark4ColumnCompat.fromCatalystExpression(
-      expr.underlying
-    )
-
-  private def wickRef[T]: DataSeq.Ref[T] =
-    DataSeq.Ref[T](None)
-
-  private def wickFilter[T](
-      dataSeq: DataSeq[T]
-  )(condition: DataSeq.Ref[T] => Expr[Boolean]): DataSeq[T] =
-    DataSeq[T](
-      dataSeq.dataFrame.filter(
-        toSparkColumn(condition(wickRef[T]))
-      )
-    )
-
   private def transformTransactions(
       transactions: DataSeq[RawTransaction]
   ): DataSeq[EnrichedTransaction] = {
-    val validTransactions = wickFilter(transactions) { row =>
+    val validTransactions = transactions.filter { row =>
       row.`_corrupt_record`.isNull &&
       row.transaction_id.isNotNull &&
       row.customer_id.isNotNull &&
@@ -266,19 +266,19 @@ object Main {
       validTransactions.dataFrame
         .withColumn(
           "event_time",
-          try_to_timestamp(sparkCol("event_ts"), lit("yyyy-MM-dd'T'HH:mm:ss"))
+          try_to_timestamp(col("event_ts"), lit("yyyy-MM-dd'T'HH:mm:ss"))
         )
-        .filter(sparkCol("event_time").isNotNull)
-        .withColumn("event_date", to_date(sparkCol("event_time")))
+        .filter(col("event_time").isNotNull)
+        .withColumn("event_date", to_date(col("event_time")))
         .withColumn(
           "gross_amount",
-          sparkCol("quantity") * sparkCol("unit_price")
+          col("quantity") * col("unit_price")
         )
         .withColumn(
           "net_amount",
-          sparkRound(
-            sparkCol("gross_amount") *
-              (lit(1.0) - sparkCol("discount_pct")),
+          round(
+            col("gross_amount") *
+              (lit(1.0) - col("discount_pct")),
             2
           )
         )
@@ -289,53 +289,47 @@ object Main {
   private def summarizeTransactions(
       transactions: DataSeq[EnrichedTransaction]
   ): DataFrame = {
-    val transaction = wickRef[EnrichedTransaction]
-    val groupColumns = Seq(
-      "event_date" -> transaction.event_date,
-      "region" -> transaction.region,
-      "country" -> transaction.country,
-      "product_category" -> transaction.product_category,
-      "status" -> transaction.status
-    ).map { case (name, expr) => toSparkColumn(expr).as(name) }
+    val aggregated = transactions
+      .groupBy { transaction =>
+        (
+          event_date = transaction.event_date,
+          region = transaction.region,
+          country = transaction.country,
+          product_category = transaction.product_category,
+          status = transaction.status
+        )
+      }
+      .agg { transaction =>
+        (
+          transaction_count = count(transaction.transaction_id),
+          unique_customers = countDistinct(transaction.customer_id),
+          units_sold = sum(transaction.quantity),
+          gross_revenue = sum(transaction.gross_amount),
+          net_revenue = sum(transaction.net_amount)
+        )
+      }
 
-    val aggregateColumns = Seq(
-      "transaction_count" -> sparkCount(
-        toSparkColumn(transaction.transaction_id)
-      ),
-      "unique_customers" -> sparkCountDistinct(
-        toSparkColumn(transaction.customer_id)
-      ),
-      "units_sold" -> sparkSum(toSparkColumn(transaction.quantity)),
-      "gross_revenue" -> sparkSum(toSparkColumn(transaction.gross_amount)),
-      "net_revenue" -> sparkSum(toSparkColumn(transaction.net_amount))
-    ).map { case (name, column) => column.as(name) }
-
-    val aggregated = transactions.dataFrame
-      .groupBy(groupColumns*)
-      .agg(aggregateColumns.head, aggregateColumns.tail*)
-
-    val rounded = aggregated.select(
-      sparkCol("event_date"),
-      sparkCol("region"),
-      sparkCol("country"),
-      sparkCol("product_category"),
-      sparkCol("status"),
-      sparkCol("transaction_count"),
-      sparkCol("unique_customers"),
-      sparkCol("units_sold"),
-      sparkRound(sparkCol("gross_revenue"), 2).as("gross_revenue"),
-      sparkRound(sparkCol("net_revenue"), 2).as("net_revenue")
+    val rounded = aggregated.dataFrame.select(
+      col("event_date"),
+      col("region"),
+      col("country"),
+      col("product_category"),
+      col("status"),
+      col("transaction_count"),
+      col("unique_customers"),
+      col("units_sold"),
+      round(col("gross_revenue"), 2).as("gross_revenue"),
+      round(col("net_revenue"), 2).as("net_revenue")
     )
 
-    val summary = wickRef[TransactionSummary]
-    rounded.sort(
-      Seq(
+    DataSeq[TransactionSummary](rounded).orderBy { summary =>
+      (
         summary.event_date,
         summary.region,
         summary.country,
         summary.product_category,
         summary.status
-      ).map(toSparkColumn)*
-    )
+      )
+    }.dataFrame
   }
 }

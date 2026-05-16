@@ -4,7 +4,7 @@ This repository is a ready-to-open Scala 3 development workspace for building
 and running an Apache Spark CSV pipeline. It includes:
 
 - Scala `3.8.3`
-- Apache Spark SQL `4.1.1`
+- Apache Spark SQL `3.5.1`
 - Wick `0.0.4` for type-safe Spark DataFrame transformations
 - sbt `1.12.11`
 - a VS Code Dev Containers setup with JDK 21, Scala CLI, sbt, Metals, Codex,
@@ -16,9 +16,9 @@ and running an Apache Spark CSV pipeline. It includes:
 The example application starts a local Spark standalone cluster with one master
 and three worker nodes, reads a transaction CSV with a fixed schema, validates
 and enriches rows, aggregates revenue metrics, and writes partitioned Parquet
-output. The pipeline uses Wick for typed filtering, grouping keys, aggregation
-inputs, and ordering while keeping Spark SQL APIs for CSV parsing,
-timestamp/date handling, aggregate functions, rounding, and Parquet writes.
+output. The pipeline uses Wick for typed filtering, grouping keys, aggregate
+expressions, and ordering while keeping Spark SQL APIs for CSV parsing,
+timestamp/date handling, rounding, and Parquet writes.
 
 ## Quick Start
 
@@ -68,7 +68,7 @@ for Spark's executor memory overhead on each 4096 MiB worker. The
 application driver JVM uses `-Xmx4g` for `sbt run`, VS Code debug launches, and
 the production Docker image.
 
-Spark `4.1.1` is still consumed through the explicit `spark-sql_2.13` artifact
+Spark `3.5.1` is consumed through the explicit `spark-sql_2.13` artifact
 because Spark publishes its Scala APIs for Scala 2.13. The application code
 itself is compiled with Scala `3.8.3`, `SPARK_SCALA_VERSION` remains `2.13` for
 local-cluster executor startup, and local executors receive the driver's active

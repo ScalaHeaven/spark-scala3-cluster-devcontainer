@@ -15,37 +15,51 @@ object GenerateTransactions {
   private val Header =
     "transaction_id,customer_id,event_ts,region,country,product_id,product_category,quantity,unit_price,discount_pct,payment_method,status"
 
-  private val Regions = Vector(
-    Region("NA", "US"),
-    Region("NA", "CA"),
-    Region("EMEA", "DE"),
-    Region("EMEA", "FR"),
-    Region("EMEA", "GB"),
-    Region("APAC", "JP"),
-    Region("APAC", "SG"),
-    Region("LATAM", "BR")
+  private val Regions = Region.values.toVector
+  private val Products = Product.values.toVector
+  private val PaymentMethods = PaymentMethod.values.toVector
+  private val Statuses = Vector(
+    TransactionStatus.Completed,
+    TransactionStatus.Completed,
+    TransactionStatus.Completed,
+    TransactionStatus.Refunded
   )
-
-  private val Products = Vector(
-    Product("sku-1001", "hardware", 129.99),
-    Product("sku-1002", "hardware", 79.50),
-    Product("sku-2001", "software", 249.00),
-    Product("sku-2002", "software", 399.00),
-    Product("sku-3001", "services", 150.00),
-    Product("sku-3002", "services", 95.00)
-  )
-
-  private val PaymentMethods = Vector("card", "invoice", "wire", "wallet")
-  private val Statuses =
-    Vector("completed", "completed", "completed", "refunded")
   private val TimestampFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
 
-  final case class Region(region: String, country: String)
+  private enum Region(val code: String, val country: String):
+    case UnitedStates extends Region("NA", "US")
+    case Canada extends Region("NA", "CA")
+    case Germany extends Region("EMEA", "DE")
+    case France extends Region("EMEA", "FR")
+    case GreatBritain extends Region("EMEA", "GB")
+    case Japan extends Region("APAC", "JP")
+    case Singapore extends Region("APAC", "SG")
+    case Brazil extends Region("LATAM", "BR")
 
-  final case class Product(id: String, category: String, basePrice: Double)
+  private enum Product(val id: String, val category: String, val basePrice: Double):
+    case HardwarePremium extends Product("sku-1001", "hardware", 129.99)
+    case HardwareStandard extends Product("sku-1002", "hardware", 79.50)
+    case SoftwareStandard extends Product("sku-2001", "software", 249.00)
+    case SoftwareEnterprise extends Product("sku-2002", "software", 399.00)
+    case ServicesPremium extends Product("sku-3001", "services", 150.00)
+    case ServicesStandard extends Product("sku-3002", "services", 95.00)
+
+  private enum PaymentMethod(val label: String):
+    case Card extends PaymentMethod("card")
+    case Invoice extends PaymentMethod("invoice")
+    case Wire extends PaymentMethod("wire")
+    case Wallet extends PaymentMethod("wallet")
+
+  private enum TransactionStatus(val label: String):
+    case Completed extends TransactionStatus("completed")
+    case Refunded extends TransactionStatus("refunded")
 
   final case class Config(outputPath: Path, rowCount: Int)
+
+  private enum CliCommand:
+    case Run(config: Config)
+    case ShowUsage
 
   def main(args: Array[String]): Unit =
     parseArgs(args) match {
@@ -53,23 +67,28 @@ object GenerateTransactions {
         System.err.println(message)
         System.exit(1)
 
-      case Right(config) =>
+      case Right(CliCommand.ShowUsage) =>
+        println(usage)
+
+      case Right(CliCommand.Run(config)) =>
         writeTransactions(config)
         println(
           s"Wrote ${config.rowCount} transactions to ${config.outputPath}"
         )
     }
 
-  private def parseArgs(args: Array[String]): Either[String, Config] =
+  private def parseArgs(args: Array[String]): Either[String, CliCommand] =
     args.toList match {
       case Nil =>
-        Right(Config(Paths.get(DefaultOutputPath), DefaultRowCount))
+        Right(CliCommand.Run(Config(Paths.get(DefaultOutputPath), DefaultRowCount)))
       case "--help" :: Nil =>
-        Left(usage)
+        Right(CliCommand.ShowUsage)
       case outputPath :: Nil =>
-        Right(Config(Paths.get(outputPath), DefaultRowCount))
+        Right(CliCommand.Run(Config(Paths.get(outputPath), DefaultRowCount)))
       case outputPath :: rowCount :: Nil =>
-        parseRowCount(rowCount).map(Config(Paths.get(outputPath), _))
+        parseRowCount(rowCount).map { parsedRowCount =>
+          CliCommand.Run(Config(Paths.get(outputPath), parsedRowCount))
+        }
       case _ =>
         Left(usage)
     }
@@ -137,15 +156,15 @@ object GenerateTransactions {
       f"tx-$rowNumber%06d",
       f"cust-${(rowNumber % 5000) + 1}%05d",
       timestamp.format(TimestampFormatter),
-      region.region,
+      region.code,
       region.country,
       product.id,
       product.category,
       quantity.toString,
       f"$unitPrice%.2f",
       f"$discountPct%.2f",
-      paymentMethod,
-      status
+      paymentMethod.label,
+      status.label
     ).mkString(",")
   }
 }

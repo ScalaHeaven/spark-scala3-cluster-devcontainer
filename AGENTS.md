@@ -22,7 +22,7 @@ just application code.
 ## Important Files
 
 - `build.sbt`: main sbt build definition. Pins Scala `3.8.3`, enables
-  SemanticDB, adds Spark SQL `4.1.1` through the explicit `_2.13` Spark
+  SemanticDB, adds Spark SQL `3.5.1` through the explicit `_2.13` Spark
   artifact, adds Wick `0.0.4`, sets project metadata, configures the `sbt run`
   JVM heap, configures Spark Java module options, and configures `sbt-assembly`.
 - `project/build.properties`: pins sbt `1.12.11`.
@@ -102,9 +102,8 @@ sbt -Dsbt.batch=true scalafmtAll
   aligned when the CSV schema or sample data shape changes.
 - Use Wick for type-safe Spark column access when adding pipeline filters,
   projections, joins, grouping, aggregation inputs, or ordering. Keep direct
-  Spark SQL functions where Wick does not expose a Spark 4-compatible operation,
-  such as CSV loading, timestamp/date conversion, aggregate functions, rounding,
-  and file writes.
+  Spark SQL functions where Wick does not expose the operation, such as CSV
+  loading, timestamp/date conversion, rounding, and file writes.
 - Update `README.md` whenever commands, tool versions, CSV structure, startup
   behavior, or the mental model for users changes.
 

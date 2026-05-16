@@ -4,7 +4,7 @@ ThisBuild / semanticdbEnabled := true
 
 ThisBuild / scalacOptions += "-Yexplicit-nulls"
 
-lazy val sparkVersion = "4.1.1"
+lazy val sparkVersion = "3.5.1"
 lazy val wickVersion = "0.0.4"
 
 lazy val sparkJavaOptions = Seq(
