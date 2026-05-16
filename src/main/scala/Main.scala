@@ -4,23 +4,24 @@
 //> using dep com.netflix.wick::wick:0.0.4
 //> using exclude org.apache.spark:spark-sql_2.13
 
-import com.netflix.wick.{*, given}
-import com.netflix.wick.functions.count
-import com.netflix.wick.functions.countDistinct
-import com.netflix.wick.functions.sum
 import java.sql.Timestamp
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.round
-import org.apache.spark.sql.functions.to_date
-import org.apache.spark.sql.functions.try_to_timestamp
-import org.apache.spark.sql.types.DoubleType
-import org.apache.spark.sql.types.IntegerType
-import org.apache.spark.sql.types.StringType
-import org.apache.spark.sql.types.StructField
-import org.apache.spark.sql.types.StructType
+import com.netflix.wick.{*, given}
+import com.netflix.wick.functions.{count, countDistinct, sum}
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.functions.{
+  col,
+  lit,
+  round,
+  to_date,
+  try_to_timestamp
+}
+import org.apache.spark.sql.types.{
+  DoubleType,
+  StructType,
+  StringType,
+  StructField,
+  IntegerType
+}
 import org.apache.spark.storage.StorageLevel
 
 object Main {
